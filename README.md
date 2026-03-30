@@ -1,53 +1,74 @@
 # dial
 
-**Online weight optimization via Thompson Sampling.** Learns optimal configurations from outcome feedback — no grid search, no manual tuning.
+**Online weight optimization via Thompson Sampling.** Learns optimal configurations from outcome feedback — no grid search, no manual tuning. Converges in ~50 observations. [+41% NDCG@5](https://github.com/kusp-dev/retrieval-weight-experiment) over fixed-weight baselines in controlled experiments.
 
+[![CI](https://github.com/fonz-ai/dial/actions/workflows/ci.yml/badge.svg)](https://github.com/fonz-ai/dial/actions/workflows/ci.yml)
 [![Python 3.11+](https://img.shields.io/badge/python-3.11+-blue.svg)](https://www.python.org/downloads/)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
-[![Tests](https://img.shields.io/badge/tests-47_passing-brightgreen.svg)]()
 
 ```
 pip install kusp-dial
 ```
 
-## What it does
-
-Dial treats configuration selection as an online learning problem. You define options ("arms"), observe outcomes, and the system learns which option works best — adapting over time as conditions change.
+## Quick start
 
 ```python
 from thompson_bandits import ThompsonBandit, InMemoryStore
 
-store = InMemoryStore(arm_ids=["strategy_a", "strategy_b", "strategy_c"])
+store = InMemoryStore(arm_ids=["relevance_heavy", "balanced", "recency_heavy"])
 bandit = ThompsonBandit(store)
 
-arm = bandit.select()           # pick the best option (exploration + exploitation)
-bandit.update(arm, reward=0.8)  # observe outcome, update beliefs
+# Run the loop: select → observe → update
+for query in queries:
+    arm = bandit.select()
+    reward = run_query(query, strategy=arm)
+    bandit.update(arm, reward=reward)
+
+print(bandit.get_summary())
 ```
 
-50 observations to converge. Zero hyperparameters to set.
+After 50 iterations:
 
-## Why
+```
+BanditSummary(
+  best_arm='relevance_heavy',
+  total_pulls=50,
+  arms=[
+    ArmSummary(arm_id='balanced',        mean=0.5765, pulls=11),
+    ArmSummary(arm_id='recency_heavy',   mean=0.4210, pulls=8),
+    ArmSummary(arm_id='relevance_heavy', mean=0.8903, pulls=31),
+  ]
+)
+```
 
-Most systems treat configuration as a one-time decision. Set weights, pick a strategy, move on. But the best choice changes — user behavior drifts, data distributions shift, what worked in January fails in March.
+The bandit explores all three options early, then converges — 31 of 50 pulls on the winner, without you telling it which arm is best.
 
-Dial uses [Thompson Sampling](https://en.wikipedia.org/wiki/Thompson_sampling) (1933) to balance exploration and exploitation automatically. Each option maintains a Beta distribution that gets sharper with evidence. The system samples from these distributions to make decisions, naturally exploring uncertain options while exploiting known winners.
+## Why Dial?
+
+**vs. grid search / random search** — Those require running every combination upfront. Dial learns online, one observation at a time. No batch experiments needed.
+
+**vs. manual tuning** — Manual weights are a guess that stays frozen. Dial adapts when the best option shifts — user behavior drifts, data distributions change, what worked in January fails in March.
+
+**vs. contextual bandits (LinUCB, neural)** — Those need feature engineering and thousands of observations. Dial works with 50 observations and zero features. Start with Dial; graduate to contextual bandits when you have the data to justify them.
+
+**vs. Bayesian optimization (Optuna, Ax)** — Those optimize over continuous parameter spaces. Dial optimizes over discrete options (strategies, presets, model choices). Different problem shape.
 
 ### Use cases
 
 - **Retrieval weight tuning** — learn the optimal blend of relevance, recency, and importance for RAG systems
 - **Model routing** — discover which LLM performs best for different query types
 - **Prompt selection** — A/B test prompt variants with automatic convergence
-- **Feature flags** — gradual rollout with reward-based promotion
-- **Any multi-option decision** where you can measure outcomes
+- **Feature flag rollout** — promote variants based on measured outcomes
+- **Any multi-option decision** where you can observe a reward signal
 
 ## Features
 
 - **Beta posteriors** — each arm maintains a `Beta(alpha, beta)` distribution updated with observed rewards
-- **Discounted Thompson Sampling** — optional decay factor tracks non-stationary environments where the best arm shifts over time
+- **Discounted Thompson Sampling** — optional decay factor for non-stationary environments where the best arm shifts over time
 - **Cost-aware rewards** — built-in `cost_aware_reward()` scales outcomes by resource efficiency
 - **Pluggable storage** — `InMemoryStore` for testing, `SQLiteStore` for persistence, or implement the `ArmStore` protocol for anything else
-- **Dependency injection** — core bandit logic has zero SQLite dependency
-- **Type-safe** — full type annotations, `runtime_checkable` Protocol
+- **Zero SQLite dependency in core** — bandit logic talks only to the `ArmStore` protocol
+- **Type-safe** — full annotations, `runtime_checkable` Protocol
 
 ## Storage backends
 
@@ -119,28 +140,44 @@ bandit.update(arm, reward=adjusted)
 
 ```python
 summary = bandit.get_summary()
-print(summary.best_arm)      # arm with highest posterior mean
-print(summary.total_pulls)   # total observations across all arms
+print(summary.best_arm)      # 'relevance_heavy'
+print(summary.total_pulls)   # 50
 
 for arm in summary.arms:
     print(f"{arm.arm_id}: mean={arm.mean:.3f}, pulls={arm.pulls}")
+# balanced:        mean=0.577, pulls=11
+# recency_heavy:   mean=0.421, pulls=8
+# relevance_heavy: mean=0.890, pulls=31
 ```
 
 ## Research
 
-Dial extracts the Thompson Sampling engine from a published research experiment on gradient-free retrieval weight learning:
+Dial extracts the Thompson Sampling engine from a published research experiment on gradient-free retrieval weight learning. The experiment ran 1,200 episodes across 4 conditions on a $50/month API budget.
 
-> DiRocco, A. (2026). *Gradient-Free Retrieval Weight Learning via Thompson Sampling with LLM Self-Assessment.* [kusp-dev/retrieval-weight-experiment](https://github.com/kusp-dev/retrieval-weight-experiment)
+<details>
+<summary>Citation (BibTeX)</summary>
 
-The experiment ran 1,200 episodes across 4 conditions and demonstrated that Thompson Sampling converges to effective retrieval weight configurations in ~50 queries, achieving +41% NDCG@5 over fixed-weight baselines.
+```bibtex
+@article{dirocco2026gradient,
+  title   = {Gradient-Free Retrieval Weight Learning via Thompson Sampling
+             with LLM Self-Assessment},
+  author  = {DiRocco, Alfonso},
+  year    = {2026},
+  url     = {https://github.com/kusp-dev/retrieval-weight-experiment},
+  note    = {1,200 episodes, 4 conditions, +41\% NDCG@5 over fixed baselines}
+}
+```
+
+</details>
 
 ## Development
 
 ```bash
 git clone https://github.com/fonz-ai/dial.git
 cd dial
-pip install -e ".[dev]"
-pytest
+uv sync --extra dev
+uv run pytest tests/ -v
+uv run ruff check src/ tests/
 ```
 
 ## License
