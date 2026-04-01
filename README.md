@@ -7,7 +7,7 @@
 [![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 
 ```
-pip install kusp-dial
+pip install fonz-dial
 ```
 
 ## Quick start
@@ -171,6 +171,88 @@ bandit = ThompsonBandit(store, config=config)
 ```
 
 The bandit starts biased toward the prior winner but remains open to switching if the data disagrees. With shrinkage (e.g., scaling the prior by 0.15), the prior influence fades within ~20 observations.
+
+## API reference
+
+### ThompsonBandit
+
+```python
+ThompsonBandit(store: ArmStore, config: BanditConfig | None = None, rng: numpy.random.Generator | None = None)
+```
+
+The main entry point. Wraps any `ArmStore` backend with Thompson Sampling logic.
+
+- **`select() -> str`** — Draws a sample from each arm's Beta posterior and returns the arm_id with the highest sample. Raises `ValueError` if the store is empty.
+- **`update(arm_id: str, reward: float) -> None`** — Updates the posterior for the given arm. Reward must be in `[0, 1]`. If discounting is enabled, existing evidence is decayed before the new observation is applied.
+- **`get_summary() -> BanditSummary`** — Returns a serialization-friendly snapshot of all arms.
+- **`get_arm(arm_id: str) -> ArmStats | None`** — Returns stats for one arm, or `None`.
+- **`get_arms() -> list[ArmStats]`** — Returns stats for all arms.
+
+### BanditConfig
+
+```python
+BanditConfig(discount: float | None = None, prior_alpha: float = 1.0, prior_beta: float = 1.0)
+```
+
+- **`discount`** — Decay factor in `(0, 1)` for non-stationary environments. `None` disables discounting.
+- **`prior_alpha`**, **`prior_beta`** — Initial Beta parameters for new arms. Defaults give a uniform `Beta(1, 1)` prior.
+
+### ArmStats
+
+```python
+ArmStats(arm_id: str, alpha: float = 1.0, beta: float = 1.0, pulls: int = 0, total_reward: float = 0.0)
+```
+
+State of one arm. Also exposes two computed properties:
+
+- **`mean -> float`** — Expected value: `alpha / (alpha + beta)`.
+- **`variance -> float`** — Variance of the Beta distribution.
+
+### BanditSummary / ArmSummary
+
+```python
+BanditSummary(arms: list[ArmSummary], best_arm: str | None, total_pulls: int)
+ArmSummary(arm_id: str, alpha: float, beta: float, mean: float, pulls: int)
+```
+
+Returned by `get_summary()`. `best_arm` is the arm_id with the highest mean, or `None` if no arms exist.
+
+### InMemoryStore
+
+```python
+InMemoryStore(arm_ids: list[str] | None = None, prior_alpha: float = 1.0, prior_beta: float = 1.0)
+```
+
+Dict-backed, ephemeral. Good for testing and short-lived processes.
+
+### SQLiteStore
+
+```python
+SQLiteStore(conn: sqlite3.Connection, arm_ids: list[str] | None = None, prior_alpha: float = 1.0, prior_beta: float = 1.0, table_name: str = "bandit_arms")
+SQLiteStore.from_path(db_path: str | Path, ...) -> SQLiteStore  # creates connection with WAL mode
+```
+
+Persistent storage. `from_path` owns the connection; the constructor form lets you pass an existing connection. Creates the table if it doesn't exist. Safe to re-initialize — existing arms are preserved (`INSERT OR IGNORE`).
+
+### ArmStore protocol
+
+```python
+class ArmStore(Protocol):
+    def get_stats(self, arm_id: str) -> ArmStats | None: ...
+    def update_stats(self, arm_id: str, alpha_delta: float, beta_delta: float, reward: float) -> None: ...
+    def get_all_arms(self) -> list[ArmStats]: ...
+    def decay(self, arm_id: str, factor: float) -> None: ...
+```
+
+`runtime_checkable`. Implement these four methods on any class to create a custom backend — no inheritance required.
+
+### cost_aware_reward
+
+```python
+cost_aware_reward(raw_reward: float, cost: float, baseline_cost: float = 1.0) -> float
+```
+
+Scales a reward by cost efficiency: `raw_reward * (baseline_cost / cost)`, clamped to `[0, 1]`. Cheaper-than-baseline episodes get a boost; more expensive ones get penalized. Zero cost passes through unchanged.
 
 ## Research
 
