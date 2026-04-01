@@ -150,9 +150,31 @@ for arm in summary.arms:
 # relevance_heavy: mean=0.890, pulls=31
 ```
 
+## Warm-start transfer
+
+When you have prior knowledge (from a previous experiment, a related task, or domain expertise), encode it as informative priors instead of starting from uniform:
+
+```python
+from thompson_bandits import ThompsonBandit, InMemoryStore, BanditConfig
+
+# Previous experiment found relevance_heavy won ~63% of pulls.
+# Encode that as Beta(6.3, 3.7) instead of the default Beta(1, 1).
+config = BanditConfig(prior_alpha=1.0, prior_beta=1.0)
+store = InMemoryStore(arm_ids=["relevance_heavy", "balanced", "recency_heavy"])
+
+# Override priors for the arm with known history
+arm = store.get_stats("relevance_heavy")
+arm.alpha = 6.3
+arm.beta = 3.7
+
+bandit = ThompsonBandit(store, config=config)
+```
+
+The bandit starts biased toward the prior winner but remains open to switching if the data disagrees. With shrinkage (e.g., scaling the prior by 0.15), the prior influence fades within ~20 observations.
+
 ## Research
 
-Dial extracts the Thompson Sampling engine from a published research experiment on gradient-free retrieval weight learning. The experiment ran 1,200 episodes across 4 conditions on a $50/month API budget.
+Dial extracts the Thompson Sampling engine from a research experiment on gradient-free retrieval weight learning. The experiment ran 1,200 episodes across 4 conditions on a $50/month API budget.
 
 <details>
 <summary>Citation (BibTeX)</summary>

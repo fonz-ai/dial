@@ -3,7 +3,7 @@ requires = ["setuptools>=68.0", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "kusp-dial"
+name = "fonz-dial"
 version = "0.1.0"
 description = "Online weight optimization via Thompson Sampling — learns optimal configurations from outcome feedback."
 readme = "README.md"
