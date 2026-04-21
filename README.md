@@ -1,6 +1,6 @@
 # dial
 
-**Online weight optimization via Thompson Sampling.** Learns optimal configurations from outcome feedback — no grid search, no manual tuning. Converges in ~50 observations. [+41% NDCG@5](https://github.com/kusp-dev/retrieval-weight-experiment) over fixed-weight baselines in controlled experiments.
+**Online weight optimization via Thompson Sampling.** Learns optimal configurations from outcome feedback — no grid search, no manual tuning. Converges in ~50 observations. [+26% NDCG@5](https://github.com/kusp-dev/retrieval-weight-experiment) over fixed-weight baselines in controlled experiments.
 
 [![CI](https://github.com/fonz-ai/dial/actions/workflows/ci.yml/badge.svg)](https://github.com/fonz-ai/dial/actions/workflows/ci.yml)
 [![Python 3.11+](https://img.shields.io/badge/python-3.11+-blue.svg)](https://www.python.org/downloads/)
@@ -268,7 +268,7 @@ Dial extracts the Thompson Sampling engine from a research experiment on gradien
   author  = {DiRocco, Alfonso},
   year    = {2026},
   url     = {https://github.com/kusp-dev/retrieval-weight-experiment},
-  note    = {1,200 episodes, 4 conditions, +41\% NDCG@5 over fixed baselines}
+  note    = {1,200 episodes, 4 conditions, +26\% NDCG@5 over fixed baselines}
 }
 ```
 
